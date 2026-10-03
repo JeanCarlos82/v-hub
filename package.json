@@ -1,0 +1,17 @@
+{
+  "name": "v-hub",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "build": "pnpm --filter web build && pnpm --filter server build",
+    "start": "pnpm --filter server start",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "packageManager": "pnpm@10.0.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

@@ -1,0 +1,35 @@
+# Despliegue en el VPS donde corre Coolify.
+#   1. cp .env.example .env  (y rellénalo)
+#   2. docker compose up -d --build
+services:
+  vhub:
+    build: .
+    container_name: vhub
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # gestión de contenedores, stats y logs
+      - /proc:/host/proc:ro                       # CPU, RAM, red y carga del host
+      - /:/hostfs:ro                              # uso de disco del host
+      - vhub-data:/data                           # SQLite: histórico, conexiones cifradas, auditoría
+    networks:
+      - coolify # misma red que las BD de Coolify -> acceso interno sin exponer puertos
+    labels:
+      # Lo publica el Traefik de Coolify con HTTPS automático (Let's Encrypt)
+      - traefik.enable=true
+      - traefik.http.routers.vhub.rule=Host(`${VHUB_DOMAIN}`)
+      - traefik.http.routers.vhub.entrypoints=https
+      - traefik.http.routers.vhub.tls=true
+      - traefik.http.routers.vhub.tls.certresolver=letsencrypt
+      - traefik.http.services.vhub.loadbalancer.server.port=4000
+      - traefik.http.routers.vhub-http.rule=Host(`${VHUB_DOMAIN}`)
+      - traefik.http.routers.vhub-http.entrypoints=http
+      - traefik.http.routers.vhub-http.middlewares=vhub-https
+      - traefik.http.middlewares.vhub-https.redirectscheme.scheme=https
+
+networks:
+  coolify:
+    external: true
+
+volumes:
+  vhub-data:
