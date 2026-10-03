@@ -24,6 +24,10 @@ export function openDatabase(dataDir: string): DatabaseSync {
       target TEXT,
       detail TEXT
     );
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
   `);
   return db;
 }

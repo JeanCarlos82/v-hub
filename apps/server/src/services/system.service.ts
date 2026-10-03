@@ -17,7 +17,7 @@ export class SystemService {
     private readonly telemetry: TelemetryService,
     private readonly metrics: MetricsRepository,
     private readonly audit: AuditLog,
-    private readonly info: { coolifyUrl: string; dbAccess: string },
+    private readonly info: () => { coolifyUrl: string; dbAccess: string },
   ) {}
 
   async status() {
@@ -43,7 +43,7 @@ export class SystemService {
       }
     }
     return {
-      coolify: { ...coolifyStatus, url: this.info.coolifyUrl || null, dbAccess: this.info.dbAccess },
+      coolify: { ...coolifyStatus, url: this.info().coolifyUrl || null, dbAccess: this.info().dbAccess },
       docker: dockerInfo,
       host: this.telemetry.latest,
     };

@@ -5,6 +5,7 @@
 import type { ContainerAction, ContainerEvent, ContainerInfo, ContainerStat } from "./container.js";
 import type { DbKind, Driver, ManualConnection } from "./database.js";
 import type { CoolifyDbKind, Environment, ProjectTree, Resource, ResourceAction, ResourceType } from "./project.js";
+import type { StoredSettings } from "./settings.js";
 import type { HostSample, MinuteSample } from "./telemetry.js";
 
 export type Unsubscribe = () => void;
@@ -86,6 +87,14 @@ export interface AuditLog {
   log(action: string, target?: string, detail?: unknown): void;
   recent(limit?: number): unknown[];
 }
+
+export interface SettingsRepository {
+  load(): StoredSettings;
+  save(patch: Partial<StoredSettings>): void;
+}
+
+/** Comprueba unas credenciales de Coolify sin guardarlas; devuelve la versión o lanza un error. */
+export type CoolifyProbe = (url: string, token: string) => Promise<string>;
 
 // --- Bases de datos ---
 

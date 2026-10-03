@@ -4,11 +4,12 @@
  */
 import Docker from "dockerode";
 import { config } from "./config.js";
-import { CoolifyClient } from "./infra/coolify/client.js";
+import { CoolifyClient, probeCoolify } from "./infra/coolify/client.js";
 import { createCipher } from "./infra/crypto.js";
 import { SqliteAuditLog } from "./infra/db/audit.repository.js";
 import { SqliteConnectionRepository } from "./infra/db/connection.repository.js";
 import { SqliteMetricsRepository } from "./infra/db/metrics.repository.js";
+import { SqliteSettingsRepository } from "./infra/db/settings.repository.js";
 import { openDatabase } from "./infra/db/sqlite.js";
 import { DockerRuntime } from "./infra/docker/client.js";
 import { DockerEventFeed } from "./infra/docker/events.js";
@@ -22,6 +23,7 @@ import { DatabaseService } from "./services/database.service.js";
 import { ExplorerService } from "./services/explorer.service.js";
 import { ProjectService } from "./services/project.service.js";
 import { ResourceService } from "./services/resource.service.js";
+import { SettingsService } from "./services/settings.service.js";
 import { SystemService } from "./services/system.service.js";
 import { TelemetryService } from "./services/telemetry.service.js";
 
@@ -30,8 +32,10 @@ export function createContainer() {
   const db = openDatabase(config.dataDir);
   const audit = new SqliteAuditLog(db);
   const metrics = new SqliteMetricsRepository(db);
-  const connectionRepo = new SqliteConnectionRepository(db, createCipher(config.secret));
-  const coolify = new CoolifyClient(config.coolify.url, config.coolify.token);
+  const cipher = createCipher(config.secret);
+  const connectionRepo = new SqliteConnectionRepository(db, cipher);
+  const settings = new SettingsService(new SqliteSettingsRepository(db, cipher), config.env, probeCoolify, audit);
+  const coolify = new CoolifyClient(() => settings.coolify());
   const docker = new Docker({ socketPath: config.dockerSocket });
   const runtime = new DockerRuntime(docker, config.dockerSocket);
   const dockerAvailable = () => runtime.available();
@@ -43,10 +47,11 @@ export function createContainer() {
     config.telemetryIntervalMs,
   );
   const projects = new ProjectService(coolify, audit);
-  const connections = new ConnectionService(coolify, connectionRepo, driverFactory, audit, config.coolify.dbAccess);
+  const connections = new ConnectionService(coolify, connectionRepo, driverFactory, audit, () => settings.dbAccess());
 
   return {
-    auth: new AuthService(audit, { user: config.adminUser, password: config.adminPassword }),
+    settings,
+    auth: new AuthService(audit, settings),
     projects,
     resources: new ResourceService(coolify, audit, projects),
     databases: new DatabaseService(coolify, audit),
@@ -59,10 +64,10 @@ export function createContainer() {
       audit,
     ),
     telemetry,
-    system: new SystemService(coolify, runtime, telemetry, metrics, audit, {
-      coolifyUrl: config.coolify.url,
-      dbAccess: config.coolify.dbAccess,
-    }),
+    system: new SystemService(coolify, runtime, telemetry, metrics, audit, () => ({
+      coolifyUrl: settings.coolify().url,
+      dbAccess: settings.dbAccess(),
+    })),
   };
 }
 

@@ -125,3 +125,15 @@ export interface QueryResult {
   command?: string;
   durationMs: number;
 }
+
+export interface SetupStatus {
+  needsSetup: boolean;
+  coolifyFromEnv: boolean;
+  defaultCoolifyUrl: string;
+}
+
+export interface SettingsView {
+  adminUser: string;
+  coolify: { url: string; tokenHint: string | null; dbAccess: "internal" | "external" };
+  locked: { admin: boolean; coolifyUrl: boolean; coolifyToken: boolean; dbAccess: boolean };
+}

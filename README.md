@@ -40,21 +40,54 @@ redespliegue ni pérdida de datos.
 - `apps/server` — Fastify 5 + TypeScript. WebSocket único en `/api/ws` con topics `host`, `containers`, `events` y `logs:<id>`.
 - `apps/web` — React 19 + Vite + Tailwind 4 + TanStack Query.
 
-## Despliegue en el VPS
+## Instalación
 
-1. **Token de Coolify**: en Coolify → *Keys & Tokens* → *API tokens*, crea uno con permiso `root`
-   (o `read`, `write`, `deploy` y `read:sensitive`). Sin `read:sensitive` Coolify no devuelve las URLs
-   de las bases de datos y el explorador no podrá conectarse. Comprueba también que la API está activada
-   en *Settings → API*.
-2. **DNS**: crea un registro A apuntando `vhub.tudominio.com` a la IP del VPS.
-3. **En el VPS**:
-   ```bash
-   git clone <tu-repo> v-hub && cd v-hub
-   cp .env.example .env    # rellena VHUB_DOMAIN, ADMIN_PASSWORD y COOLIFY_TOKEN
-   docker compose up -d --build
-   ```
-   El contenedor se une a la red `coolify`, y el Traefik de Coolify lo publica con HTTPS gracias a las
-   etiquetas de `docker-compose.yml`.
+Necesitas un VPS con [Coolify](https://coolify.io/docs/get-started/installation) instalado. Entra por SSH y ejecuta:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/JeanCarlos82/v-hub/main/install.sh | sudo bash
+```
+
+El instalador comprueba Docker y Coolify, descarga V-HUB y lo arranca. Al terminar te enseña la dirección del panel y
+un **código de instalación**:
+
+```
+  Abre:  https://vhub.203.0.113.25.sslip.io
+  Código de instalación:  K7PM-4QXZ
+```
+
+Abre esa dirección y el asistente te pedirá tres cosas:
+
+1. El **código de instalación**. Si lo pierdes, lo ves con `docker logs vhub`.
+2. Tu **usuario y contraseña** para el panel.
+3. Un **token de Coolify**: en Coolify, *Keys & Tokens → API Tokens* (no «Private Keys»), con permiso `root`.
+   Cópialo entero, incluido el `número|` del principio, y comprueba que la API está activada en *Settings → API*.
+
+No hay que editar ningún fichero. El token y la contraseña se pueden cambiar después en **Ajustes**.
+
+**Dominio:** sin dominio propio se usa `vhub.<IP>.sslip.io`, que apunta solo a tu VPS y tiene HTTPS. Para usar uno tuyo,
+crea un registro A hacia la IP del VPS y ejecuta:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/JeanCarlos82/v-hub/main/install.sh | sudo VHUB_DOMAIN=panel.tudominio.com bash
+```
+
+**Actualizar:** vuelve a ejecutar el mismo comando. Descarga la última versión y conserva tus datos.
+
+**Dónde queda:** en `/opt/v-hub` (`docker-compose.yml` y `.env`). Los datos están en el volumen Docker `v-hub_vhub-data`.
+
+### Instalación a mano (desde el código)
+
+Si prefieres construir la imagen tú mismo:
+
+```bash
+git clone https://github.com/JeanCarlos82/v-hub.git && cd v-hub
+cp .env.example .env    # rellena VHUB_DOMAIN; el resto lo pide el asistente
+docker compose up -d --build
+```
+
+Cualquier variable del `.env` (`ADMIN_PASSWORD`, `COOLIFY_TOKEN`…) tiene prioridad sobre lo guardado desde el panel y
+aparece bloqueada en Ajustes.
 
 ### Seguridad
 
@@ -64,6 +97,7 @@ redespliegue ni pérdida de datos.
   Si cambias ese secreto, las conexiones guardadas dejan de poder leerse (V-HUB las ignora y avisa en el log).
 - El login tiene límite de 10 intentos por minuto y todos los intentos fallidos quedan en la auditoría.
 - Las sesiones son JWT en cookie `httpOnly` (7 días).
+- Hasta completar el asistente, sólo quien tenga el código de instalación (visible en el VPS) puede configurar el panel.
 
 ## Desarrollo local
 
@@ -71,6 +105,7 @@ redespliegue ni pérdida de datos.
 pnpm install
 cp .env.example .env
 pnpm dev            # API en :4000, web en :5173 (con proxy de /api y WebSocket)
+                    # el primer arranque muestra el asistente; el código sale en la consola
 ```
 
 Para desarrollar en macOS:
@@ -82,9 +117,9 @@ Para desarrollar en macOS:
 
 | Variable | Por defecto | Descripción |
 |---|---|---|
-| `ADMIN_USER` / `ADMIN_PASSWORD` | `admin` / *(obligatoria en producción)* | Acceso al panel |
+| `ADMIN_USER` / `ADMIN_PASSWORD` | *(asistente)* | Acceso al panel. Si se definen, el asistente no crea cuenta y la contraseña no se puede cambiar desde Ajustes |
 | `APP_SECRET` | se genera en `/data/.secret` | Firma de sesiones y cifrado |
-| `COOLIFY_URL` / `COOLIFY_TOKEN` | — | API de Coolify |
+| `COOLIFY_URL` / `COOLIFY_TOKEN` | `http://coolify:8080` / *(asistente)* | API de Coolify |
 | `COOLIFY_DB_ACCESS` | `internal` | `internal` (red docker) o `external` (URL pública) |
 | `DOCKER_SOCKET` | `/var/run/docker.sock` | Socket de Docker |
 | `HOST_PROC` / `HOST_ROOT` | `/proc` / `/` | Montajes del host para la telemetría |

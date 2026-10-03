@@ -16,6 +16,8 @@ import { registerErrorHandler } from "./routes/plugins/error-handler.js";
 import { projectRoutes } from "./routes/projects.routes.js";
 import { realtimeRoutes } from "./routes/realtime.routes.js";
 import { resourceRoutes } from "./routes/resources.routes.js";
+import { settingsRoutes } from "./routes/settings.routes.js";
+import { setupRoutes } from "./routes/setup.routes.js";
 import { systemRoutes } from "./routes/system.routes.js";
 
 const services = createContainer();
@@ -31,6 +33,8 @@ registerErrorHandler(app);
 
 for (const routes of [
   authRoutes,
+  setupRoutes,
+  settingsRoutes,
   systemRoutes,
   containerRoutes,
   projectRoutes,

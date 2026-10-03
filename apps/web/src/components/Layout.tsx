@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { Container, Database, FolderKanban, History, LayoutDashboard, LogOut } from "lucide-react";
+import { Container, Database, FolderKanban, History, LayoutDashboard, LogOut, Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router";
 import { api } from "../lib/api";
@@ -11,6 +11,7 @@ const nav = [
   { to: "/databases", label: "Bases de datos", icon: Database },
   { to: "/containers", label: "Contenedores", icon: Container },
   { to: "/activity", label: "Actividad", icon: History },
+  { to: "/settings", label: "Ajustes", icon: Settings },
 ];
 
 export function Layout({ user, onLogout }: { user: string; onLogout: () => void }) {

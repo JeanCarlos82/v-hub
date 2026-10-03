@@ -2,11 +2,8 @@ import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-function required(name: string, fallback?: string): string {
-  const v = process.env[name] ?? fallback;
-  if (v === undefined || v === "") throw new Error(`Falta la variable de entorno ${name}`);
-  return v;
-}
+/** Variable de entorno o undefined si no está definida o está vacía. */
+const env = (name: string) => process.env[name] || undefined;
 
 const isProd = process.env.NODE_ENV === "production";
 const dataDir = resolve(process.env.DATA_DIR ?? "./data");
@@ -27,16 +24,20 @@ export const config = {
   port: Number(process.env.PORT ?? 4000),
   host: process.env.HOST ?? "0.0.0.0",
   dataDir,
-  adminUser: process.env.ADMIN_USER ?? "admin",
-  adminPassword: required("ADMIN_PASSWORD", isProd ? undefined : "admin"),
   // Clave para firmar JWT y cifrar credenciales guardadas
   secret: loadSecret(),
-  coolify: {
-    url: (process.env.COOLIFY_URL ?? "").replace(/\/+$/, ""),
-    token: process.env.COOLIFY_TOKEN ?? "",
+  /**
+   * Ajustes opcionales por entorno. Si faltan, se configuran desde el asistente web
+   * y se guardan en SQLite; si existen, tienen prioridad y no se pueden cambiar desde el panel.
+   */
+  env: {
+    adminUser: env("ADMIN_USER"),
+    adminPassword: env("ADMIN_PASSWORD"),
+    coolifyUrl: env("COOLIFY_URL"),
+    coolifyToken: env("COOLIFY_TOKEN"),
     // "internal": conecta a las BD por la red docker de coolify (V-HUB en el mismo VPS)
     // "external": usa la URL pública de la BD (útil en desarrollo local)
-    dbAccess: (process.env.COOLIFY_DB_ACCESS ?? "internal") as "internal" | "external",
+    dbAccess: env("COOLIFY_DB_ACCESS") as "internal" | "external" | undefined,
   },
   dockerSocket: process.env.DOCKER_SOCKET ?? "/var/run/docker.sock",
   // Ruta donde está montado /proc del host (en docker-compose: /proc:/host/proc:ro)

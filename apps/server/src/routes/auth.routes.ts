@@ -1,7 +1,15 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import type { Services } from "../container.js";
 
 export const SESSION_COOKIE = "vhub_token";
+
+/** Firma el JWT y lo deja en una cookie httpOnly de 7 días. */
+export function startSession(app: FastifyInstance, reply: FastifyReply, user: string) {
+  const token = app.jwt.sign({ sub: user }, { expiresIn: "7d" });
+  return reply
+    .setCookie(SESSION_COOKIE, token, { httpOnly: true, sameSite: "lax", path: "/", secure: "auto", maxAge: 7 * 86400 })
+    .send({ user });
+}
 
 export function authRoutes({ auth }: Services) {
   return async (app: FastifyInstance) => {
@@ -12,11 +20,7 @@ export function authRoutes({ auth }: Services) {
       { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
       async (req, reply) => {
         const { username, password } = (req.body ?? {}) as { username?: string; password?: string };
-        const user = auth.login(username, password, req.ip);
-        const token = app.jwt.sign({ sub: user }, { expiresIn: "7d" });
-        return reply
-          .setCookie(SESSION_COOKIE, token, { httpOnly: true, sameSite: "lax", path: "/", secure: "auto", maxAge: 7 * 86400 })
-          .send({ user });
+        return startSession(app, reply, auth.login(username, password, req.ip));
       },
     );
     app.post("/api/auth/logout", (_req, reply) => reply.clearCookie(SESSION_COOKIE, { path: "/" }).send({ ok: true }));

@@ -1,6 +1,8 @@
-# Despliegue en el VPS donde corre Coolify.
-#   1. cp .env.example .env  (y rellénalo)
+# Despliegue construyendo la imagen desde el código (para desarrollo o instalaciones a mano).
+# La forma recomendada de instalar V-HUB es el instalador: ver README.
+#   1. cp .env.example .env  (y rellena al menos VHUB_DOMAIN)
 #   2. docker compose up -d --build
+name: v-hub
 services:
   vhub:
     build: .
@@ -11,7 +13,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock # gestión de contenedores, stats y logs
       - /proc:/host/proc:ro                       # CPU, RAM, red y carga del host
       - /:/hostfs:ro                              # uso de disco del host
-      - vhub-data:/data                           # SQLite: histórico, conexiones cifradas, auditoría
+      - vhub-data:/data                           # SQLite: ajustes, histórico, conexiones cifradas, auditoría
     networks:
       - coolify # misma red que las BD de Coolify -> acceso interno sin exponer puertos
     labels:

@@ -44,46 +44,69 @@ const resourcePath: Record<ResourceType, string> = {
   service: "services",
 };
 
-/** Cliente de la API de Coolify (`/api/v1`). */
-export class CoolifyClient implements CoolifyGateway {
-  private readonly url: string;
+export interface CoolifyCredentials {
+  url: string;
+  token: string;
+}
 
-  constructor(url: string, private readonly token: string) {
-    this.url = url.replace(/\/+$/, "");
+type Query = Record<string, string | number | boolean | undefined>;
+
+async function request<T = any>(
+  creds: CoolifyCredentials,
+  method: string,
+  path: string,
+  opts: { body?: unknown; query?: Query; timeoutMs?: number } = {},
+): Promise<T> {
+  const base = creds.url.replace(/\/+$/, "");
+  if (!base || !creds.token) throw new CoolifyError(503, "Coolify no está configurado: añade la URL y el token en Ajustes");
+  const url = new URL(`${base}/api/v1${path}`);
+  for (const [k, v] of Object.entries(opts.query ?? {})) if (v !== undefined) url.searchParams.set(k, String(v));
+  const res = await fetch(url, {
+    method,
+    headers: {
+      Authorization: `Bearer ${creds.token}`,
+      Accept: "application/json",
+      ...(opts.body !== undefined ? { "Content-Type": "application/json" } : {}),
+    },
+    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    signal: AbortSignal.timeout(opts.timeoutMs ?? 30_000),
+  });
+  const text = await res.text();
+  let data: any = text;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {}
+  if (!res.ok) {
+    const msg = (data && typeof data === "object" && (data.message || data.error)) || text || res.statusText;
+    throw new CoolifyError(res.status, `Coolify ${res.status}: ${msg}`, data);
   }
+  return data as T;
+}
+
+/** Prueba unas credenciales sin guardarlas. Devuelve la versión de Coolify. */
+export async function probeCoolify(url: string, token: string): Promise<string> {
+  try {
+    return String(await request<string>({ url, token }, "GET", "/version", { timeoutMs: 10_000 }));
+  } catch (e: any) {
+    if (e instanceof CoolifyError) {
+      if (e.upstreamStatus === 401) throw new CoolifyError(400, "Coolify rechazó el token. Cópialo entero, incluido el «número|» del principio.");
+      throw e;
+    }
+    throw new CoolifyError(400, `No se pudo conectar con Coolify en ${url}: ${e.message}`);
+  }
+}
+
+/** Cliente de la API de Coolify (`/api/v1`). Lee las credenciales en cada petición (pueden cambiar desde Ajustes). */
+export class CoolifyClient implements CoolifyGateway {
+  constructor(private readonly credentials: () => CoolifyCredentials) {}
 
   isConfigured() {
-    return Boolean(this.url && this.token);
+    const c = this.credentials();
+    return Boolean(c.url && c.token);
   }
 
-  private async request<T = any>(
-    method: string,
-    path: string,
-    opts: { body?: unknown; query?: Record<string, string | number | boolean | undefined> } = {},
-  ): Promise<T> {
-    if (!this.isConfigured()) throw new CoolifyError(503, "Coolify no está configurado (COOLIFY_URL / COOLIFY_TOKEN)");
-    const url = new URL(`${this.url}/api/v1${path}`);
-    for (const [k, v] of Object.entries(opts.query ?? {})) if (v !== undefined) url.searchParams.set(k, String(v));
-    const res = await fetch(url, {
-      method,
-      headers: {
-        Authorization: `Bearer ${this.token}`,
-        Accept: "application/json",
-        ...(opts.body !== undefined ? { "Content-Type": "application/json" } : {}),
-      },
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-      signal: AbortSignal.timeout(30_000),
-    });
-    const text = await res.text();
-    let data: any = text;
-    try {
-      data = text ? JSON.parse(text) : null;
-    } catch {}
-    if (!res.ok) {
-      const msg = (data && typeof data === "object" && (data.message || data.error)) || text || res.statusText;
-      throw new CoolifyError(res.status, `Coolify ${res.status}: ${msg}`, data);
-    }
-    return data as T;
+  private request<T = any>(method: string, path: string, opts: { body?: unknown; query?: Query } = {}): Promise<T> {
+    return request<T>(this.credentials(), method, path, opts);
   }
 
   version() {

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 
-const PUBLIC = new Set(["/api/auth/login", "/api/health"]);
+const PUBLIC = new Set(["/api/auth/login", "/api/health", "/api/setup/status", "/api/setup"]);
 
 /** Toda ruta `/api/*` exige un JWT válido, salvo las públicas. */
 export function registerAuthGuard(app: FastifyInstance) {

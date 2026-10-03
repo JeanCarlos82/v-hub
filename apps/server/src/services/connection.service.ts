@@ -2,6 +2,7 @@ import type { ConnectionSummary, DbKind, Driver } from "../domain/database.js";
 import { BadRequestError, NotFoundError } from "../domain/errors.js";
 import type { AuditLog, ConnectionRepository, CoolifyGateway, DriverFactory } from "../domain/ports.js";
 import type { Resource } from "../domain/project.js";
+import type { DbAccess } from "../domain/settings.js";
 
 const KIND_BY_ENGINE: Record<string, DbKind> = {
   postgresql: "postgres",
@@ -28,8 +29,8 @@ export class ConnectionService {
     private readonly repo: ConnectionRepository,
     private readonly drivers: DriverFactory,
     private readonly audit: AuditLog,
-    /** "internal": red docker de Coolify · "external": URL pública de la BD */
-    private readonly dbAccess: "internal" | "external",
+    /** "internal": red docker de Coolify · "external": URL pública de la BD (puede cambiar desde Ajustes) */
+    private readonly dbAccess: () => DbAccess,
   ) {
     setInterval(() => {
       for (const [id, e] of this.cache) if (Date.now() - e.lastUsed > IDLE_MS) void this.dropDriver(id);
@@ -37,7 +38,7 @@ export class ConnectionService {
   }
 
   private coolifyUrl(r: Resource): string | null {
-    const preferred = this.dbAccess === "external" ? r.externalUrl : r.internalUrl;
+    const preferred = this.dbAccess() === "external" ? r.externalUrl : r.internalUrl;
     return preferred ?? r.internalUrl ?? r.externalUrl ?? null;
   }
 
