@@ -1,0 +1,23 @@
+{
+  "name": "V-HUB · Panel de tu VPS",
+  "short_name": "V-HUB",
+  "description": "Proyectos, bases de datos y métricas de tu VPS con Coolify, en tiempo real.",
+  "lang": "es",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0e0f11",
+  "theme_color": "#151719",
+  "categories": ["developer", "utilities", "productivity"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Proyectos", "url": "/projects", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Contenedores", "url": "/containers", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Bases de datos", "url": "/databases", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

@@ -96,9 +96,19 @@ routes  →  services  →  domain  ←  infra
 ### Web (`apps/web`, React 19 + Vite + Tailwind 4 + TanStack Query + react-router)
 
 - `lib/api.ts`: `api(path, { json })` hace fetch con cookies. Un 401 fuera de `/api/auth/*` dispara el evento `vhub:unauthorized`, y `main.tsx` responde cerrando la sesión. Los tipos de la API (`Resource`, `HostSample`, `Connection`…) están **duplicados a mano** respecto al servidor (no hay paquete compartido): si cambias una respuesta del servidor, actualiza también este fichero.
-- `lib/realtime.ts`: singleton que comparte un WebSocket entre todas las vistas, con reconexión exponencial y re-suscripción automática. En los componentes se usa `useTopic(topic, onData)`.
-- La sesión es la query `["me"]`. Sin usuario se renderiza `Login` y no el router.
-- `components/ui.tsx` reúne los primitivos (Button, Modal, Badge, ConfirmDelete, Toast…); reutilízalos en lugar de crear otros.
+- `lib/realtime.ts`: singleton que comparte un WebSocket entre todas las vistas, con reconexión exponencial y re-suscripción automática. En los componentes se usa `useTopic(topic, onData)`. `Layout` mantiene una suscripción permanente a `events` para que la conexión (y el indicador «En vivo») no se cierre en pantallas sin datos en vivo.
+- La sesión es la query `["me"]`. Sin usuario se renderiza `Login` (o `Setup` si `/api/setup/status` dice `needsSetup`) y no el router.
+- `lib/format.ts` traduce lo que viene de Coolify y Docker: `statusLabel` ("running:healthy" → "En marcha"), `dockerStatusText` ("Exited (0) 2 days ago" → "Parado hace 2 días") y `auditLabel` (claves de auditoría → texto). Nunca muestres estados crudos en inglés.
+- `lib/hooks.ts`: `useContainers` (lista + stats en vivo) y `useResourceIndex` (uuid de Coolify → recurso/proyecto/entorno, para nombrar contenedores por su recurso).
+
+#### Interfaz: móvil primero, también como app
+
+- **Estructura** (`components/Layout.tsx`): en escritorio (`md:` en adelante), barra lateral; en el móvil, cabecera fija, **pestañas inferiores** (Resumen, Proyectos, Bases, Contenedores, Más) y hoja «Más» (Actividad, Ajustes, cerrar sesión, instalar app). El contenido deja hueco inferior para las pestañas y respeta `env(safe-area-inset-*)`. El explorador de BD es una ruta *full-bleed* (sin márgenes, ocupa toda la altura).
+- **Listas, no tablas:** usa `EntityRow` (`components/EntityRow.tsx`) para filas con nombre · estado · consumo · acciones. En escritorio se alinean como columnas (`actionsWidth` fija el ancho de la columna de acciones) y en el móvil pasan a dos líneas sin scroll horizontal. Para el consumo, `Usage`; sin datos, `NoUsage`.
+- **Acciones:** las principales, visibles y con texto (`Button size="sm"`: Logs, Explorar, Desplegar, Iniciar/Reiniciar); las secundarias y destructivas, en `Menu` («⋯»; desplegable en escritorio y hoja inferior en el móvil). Nada que dependa de `hover` para aparecer. Parar pide `ConfirmDialog`; borrar pide `ConfirmDelete` (escribir el nombre).
+- **Táctil:** los primitivos de `ui.tsx` crecen con la variante `pointer-coarse:` (botones de 40 px y campos de 40 px de alto) y los campos usan 16 px en el móvil (`max-sm:text-base`) para que iOS no haga zoom. `Modal` es hoja inferior en el móvil. Los toasts van encima de las pestañas. Los gráficos usan pointer events (se consultan tocando).
+- **PWA** (`public/`): `manifest.webmanifest`, iconos (`icon-192/512`, `icon-maskable-512`, `apple-touch-icon`; generados desde el logo de `favicon.svg`), `sw.js` y `offline.html`. El service worker **nunca cachea `/api/`**: las páginas van network-first con `offline.html` como respaldo y `/assets/*` (con hash) cache-first. Si cambias `sw.js` o `offline.html`, sube `CACHE`. Se registra sólo en producción (`lib/pwa.ts`), donde también está `useInstall()` para el botón de instalar y las instrucciones de iOS (`components/InstallApp.tsx`).
+- `@fastify/static` registra los ficheros de `web/dist` **al arrancar** (`wildcard: false`): si recompilas la web con el servidor en marcha, reinícialo o los nuevos `/assets/*` darán 404.
 
 ## Notas
 

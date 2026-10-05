@@ -6,6 +6,7 @@ import { Layout } from "./components/Layout";
 import { Loading, ToastProvider } from "./components/ui";
 import "./index.css";
 import { api, type SetupStatus } from "./lib/api";
+import { registerServiceWorker } from "./lib/pwa";
 import { Activity } from "./pages/Activity";
 import { Containers } from "./pages/Containers";
 import { Dashboard } from "./pages/Dashboard";
@@ -72,6 +73,8 @@ function App() {
     </BrowserRouter>
   );
 }
+
+registerServiceWorker();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

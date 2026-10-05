@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Badge, Button, Card, ErrorBox, Field, Input, Loading, PageHeader, Select, useToast } from "../components/ui";
+import { InstallInstructions } from "../components/InstallApp";
 import { api, type SettingsView } from "../lib/api";
 
 const FromEnv = () => <Badge tone="info">fijado en .env</Badge>;
@@ -167,13 +168,20 @@ export function Settings() {
 
   return (
     <>
-      <PageHeader title="Ajustes" subtitle="Conexión con Coolify y acceso al panel." />
+      <PageHeader title="Ajustes" subtitle="Conexión con Coolify, acceso al panel y app." />
       {settings.isLoading && <Loading />}
       <ErrorBox error={settings.error} />
       {settings.data && (
         <div className="grid max-w-3xl gap-4">
           <CoolifySettings view={settings.data} />
           <PasswordSettings view={settings.data} />
+          <Card className="p-4">
+            <div className="mb-3">
+              <div className="font-medium">Usar como app</div>
+              <p className="text-[13px] text-muted">Ten V-HUB en el móvil o en el ordenador como una app más, con su icono.</p>
+            </div>
+            <InstallInstructions />
+          </Card>
         </div>
       )}
     </>

@@ -26,7 +26,21 @@ body {
   font-family: var(--font-sans);
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
+  /* Sin el destello gris de iOS/Android al tocar, y sin "rebote" que arrastre toda la app */
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
 }
+/* Instalada como app: que no se pueda seleccionar texto de la interfaz por accidente al mantener pulsado */
+@media (display-mode: standalone) {
+  nav, header, button { -webkit-user-select: none; user-select: none; }
+}
+
+@keyframes sheet-up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes toast-in { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* Oculta la barra de scroll en carriles horizontales (pestañas, filtros) */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
 ::selection { background: color-mix(in oklab, var(--color-brand) 35%, transparent); }
 * { scrollbar-width: thin; scrollbar-color: var(--color-line-strong) transparent; }
 .tabular { font-variant-numeric: tabular-nums; }

@@ -30,7 +30,8 @@ export function AreaChart({
     return { line, area: `${line}L${x(s.values.length - 1)},${height}L0,${height}Z` };
   });
 
-  function onMove(e: React.MouseEvent) {
+  // Ratón o dedo: con pointer events el detalle también se ve tocando y deslizando en el móvil
+  function onMove(e: React.PointerEvent) {
     const rect = ref.current!.getBoundingClientRect();
     const rel = (e.clientX - rect.left) / rect.width;
     setHover(Math.max(0, Math.min(n - 1, Math.round(rel * (n - 1)))));
@@ -43,9 +44,10 @@ export function AreaChart({
         viewBox={`0 0 ${width} ${height}`}
         preserveAspectRatio="none"
         className="block w-full"
-        style={{ height }}
-        onMouseMove={onMove}
-        onMouseLeave={() => setHover(null)}
+        style={{ height, touchAction: "pan-y" }}
+        onPointerMove={onMove}
+        onPointerDown={onMove}
+        onPointerLeave={() => setHover(null)}
       >
         {[0.25, 0.5, 0.75].map((f) => (
           <line key={f} x1={0} x2={width} y1={height * f} y2={height * f} stroke="var(--color-line)" strokeDasharray="2 4" vectorEffect="non-scaling-stroke" />

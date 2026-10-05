@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Database, Plug, Plus, Trash2 } from "lucide-react";
+import { Database, Plug, Plus, Table2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { CreateDatabaseModal } from "../components/projects";
-import { Badge, Button, Card, Empty, ErrorBox, Field, IconButton, Input, Loading, Modal, PageHeader, Select, StatusBadge, useToast } from "../components/ui";
+import { Badge, Button, ButtonLink, Card, ConfirmDialog, Empty, ErrorBox, Field, Input, Loading, Menu, Modal, PageHeader, Select, StatusBadge, useToast } from "../components/ui";
 import { api, type Connection, type Project } from "../lib/api";
 import { bytes } from "../lib/format";
 
@@ -24,13 +24,16 @@ export function Databases() {
   const projects = useQuery({ queryKey: ["projects"], queryFn: () => api<Project[]>("/api/projects"), retry: false });
   const qc = useQueryClient();
   const toast = useToast();
+  const navigate = useNavigate();
   const [adding, setAdding] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [removing, setRemoving] = useState<Connection | null>(null);
 
   const remove = useMutation({
     mutationFn: (id: string) => api(`/api/connections/${encodeURIComponent(id)}`, { method: "DELETE" }),
     onSuccess: () => {
-      toast("ok", "Conexión eliminada");
+      toast("ok", "Conexión quitada");
+      setRemoving(null);
       qc.invalidateQueries({ queryKey: ["connections"] });
     },
   });
@@ -45,10 +48,10 @@ export function Databases() {
     <>
       <PageHeader
         title="Bases de datos"
-        subtitle="Explora tablas, edita datos y ejecuta consultas en las bases de datos de Coolify o en cualquier otra."
+        subtitle="Abre cualquier base de datos para ver sus tablas y hacer consultas."
         actions={
           <>
-            <Button icon={<Plug className="size-4" />} onClick={() => setAdding(true)}>Conectar externa</Button>
+            <Button icon={<Plug className="size-4" />} onClick={() => setAdding(true)}>Conectar una externa</Button>
             <Button variant="primary" icon={<Plus className="size-4" />} disabled={!projects.data?.length} onClick={() => setCreating(true)}>Nueva base de datos</Button>
           </>
         }
@@ -58,7 +61,13 @@ export function Databases() {
       ) : connections.error ? (
         <ErrorBox error={connections.error} />
       ) : !connections.data?.length ? (
-        <Empty icon={<Database className="size-8" />} title="Sin bases de datos">Crea una en Coolify desde aquí o conecta una externa.</Empty>
+        <Empty
+          icon={<Database className="size-8" />}
+          title="Todavía no hay bases de datos"
+          action={projects.error ? <ButtonLink to="/settings">Conectar Coolify</ButtonLink> : undefined}
+        >
+          Crea una nueva en Coolify con el botón de arriba, o conecta una que ya tengas en otro sitio.
+        </Empty>
       ) : (
         <div className="space-y-6">
           {coolifyDbs.length > 0 && (
@@ -76,16 +85,37 @@ export function Databases() {
           {manual.length > 0 && (
             <Section title="Conexiones externas">
               {manual.map((c) => (
-                <DbCard key={c.id} c={c} subtitle="Conexión manual">
-                  <IconButton title="Quitar conexión" className="hover:text-danger" onClick={(e) => { e.preventDefault(); if (confirm(`¿Quitar la conexión «${c.name}»? La base de datos no se borra.`)) remove.mutate(c.id); }}>
-                    <Trash2 className="size-3.5" />
-                  </IconButton>
-                </DbCard>
+                <DbCard
+                  key={c.id}
+                  c={c}
+                  subtitle="Conexión externa"
+                  menu={
+                    <Menu
+                      title={c.name}
+                      items={[
+                        { label: "Abrir explorador", icon: <Table2 />, onSelect: () => navigate(`/databases/${encodeURIComponent(c.id)}`) },
+                        { label: "Quitar conexión…", icon: <Trash2 />, danger: true, onSelect: () => setRemoving(c) },
+                      ]}
+                    />
+                  }
+                />
               ))}
             </Section>
           )}
         </div>
       )}
+      <ConfirmDialog
+        open={!!removing}
+        onClose={() => setRemoving(null)}
+        onConfirm={() => removing && remove.mutate(removing.id)}
+        loading={remove.isPending}
+        title={`¿Quitar «${removing?.name}»?`}
+        confirmLabel="Quitar conexión"
+        danger
+      >
+        <p className="text-[13px] text-muted">Sólo se olvida la conexión en V-HUB: la base de datos y sus datos no se tocan.</p>
+        <ErrorBox error={remove.error} />
+      </ConfirmDialog>
       <AddConnectionModal open={adding} onClose={() => setAdding(false)} />
       <CreateDatabaseModal open={creating} onClose={() => setCreating(false)} projects={projects.data ?? []} />
     </>
@@ -101,25 +131,30 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function DbCard({ c, subtitle, children }: { c: Connection; subtitle?: string; children?: React.ReactNode }) {
+function DbCard({ c, subtitle, children, menu }: { c: Connection; subtitle?: string; children?: React.ReactNode; menu?: React.ReactNode }) {
   const color = ENGINE_COLORS[c.engine] ?? "#8b9096";
+  const supported = !!c.kind;
   const body = (
-    <Card className="flex items-center gap-3 p-4 transition-colors hover:border-line-strong">
-      <div className="flex size-9 shrink-0 items-center justify-center rounded-md" style={{ background: `${color}1f`, color }}>
-        <Database className="size-4" />
+    <div className={`flex items-center gap-3 p-4 ${menu ? "pr-12" : ""}`}>
+      <div className="flex size-10 shrink-0 items-center justify-center rounded-md" style={{ background: `${color}1f`, color }}>
+        <Database className="size-5" />
       </div>
       <div className="min-w-0 flex-1">
         <div className="truncate font-medium">{c.name}</div>
-        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted">
+        <div className="mt-1 flex items-center gap-1.5 text-xs text-muted">
           <Badge>{c.engine}</Badge>
-          <span className="truncate">{subtitle}</span>
+          <span className="truncate">{supported ? subtitle : "El explorador aún no soporta este motor"}</span>
         </div>
       </div>
-      <div className="flex items-center gap-1">{children}</div>
+      <div className="flex shrink-0 items-center gap-1">{children}</div>
+    </div>
+  );
+  return (
+    <Card className={supported ? "relative transition-colors hover:border-line-strong" : "relative opacity-60"}>
+      {supported ? <Link to={`/databases/${encodeURIComponent(c.id)}`} className="block">{body}</Link> : body}
+      {menu && <div className="absolute right-2 top-1/2 -translate-y-1/2">{menu}</div>}
     </Card>
   );
-  if (!c.kind) return <div title="El explorador aún no soporta este motor" className="opacity-60">{body}</div>;
-  return <Link to={`/databases/${encodeURIComponent(c.id)}`}>{body}</Link>;
 }
 
 function AddConnectionModal({ open, onClose }: { open: boolean; onClose: () => void }) {

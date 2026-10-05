@@ -98,23 +98,35 @@ export function Explorer() {
   const lastPage = total !== null && total !== undefined ? Math.max(0, Math.ceil(total / PAGE) - 1) : null;
 
   return (
-    <div className="-m-6 flex h-[calc(100vh)] flex-col max-sm:-m-4">
-      <div className="flex flex-wrap items-center gap-3 border-b border-line bg-panel px-4 py-3">
-        <Link to="/databases" className="text-muted hover:text-fg"><ChevronLeft className="size-5" /></Link>
-        <div className="min-w-0">
-          <div className="font-semibold">{info.data!.name}</div>
+    <div className="flex h-full flex-col">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-panel px-4 py-3">
+        <Link to="/databases" title="Volver a bases de datos" className="-ml-1 rounded-md p-1 text-muted hover:text-fg pointer-coarse:p-2"><ChevronLeft className="size-5" /></Link>
+        <div className="min-w-0 flex-1">
+          <div className="truncate font-semibold">{info.data!.name}</div>
           <div className="text-xs text-muted">
             {info.data!.version}
             {info.data!.size ? ` · ${bytes(info.data!.size)}` : ""}
             {info.data!.extra?.connections !== undefined ? ` · ${info.data!.extra.connections} conexiones` : ""}
           </div>
         </div>
-        <div className="ml-auto flex items-center gap-2">
-          <span className="text-xs text-muted">{kind === "postgres" ? "Esquema" : "Base de datos"}</span>
-          <Select value={ns} onChange={(e) => setNs(e.target.value)} className="w-44">
+        <label className="flex items-center gap-2 max-sm:w-full">
+          <span className="shrink-0 text-xs text-muted max-md:w-[5.5rem]">{kind === "postgres" ? "Esquema" : "Base de datos"}</span>
+          <Select value={ns} onChange={(e) => setNs(e.target.value)} className="w-44 max-sm:w-full">
             {namespaces.data?.map((n) => <option key={n}>{n}</option>)}
           </Select>
-        </div>
+        </label>
+        {/* Móvil: la lista lateral no cabe, así que la tabla se elige aquí */}
+        {kind !== "redis" && (
+          <label className="flex w-full items-center gap-2 md:hidden">
+            <span className="w-[5.5rem] shrink-0 text-xs text-muted">{kind === "mongodb" ? "Colección" : "Tabla"}</span>
+            <Select value={table ?? ""} onChange={(e) => { setTable(e.target.value || null); if (tab === "query") setTab("data"); }} className="w-full">
+              <option value="">{tables.isLoading ? "Cargando…" : `Elige una ${kind === "mongodb" ? "colección" : "tabla"}…`}</option>
+              {tables.data?.map((t) => (
+                <option key={t.name} value={t.name}>{t.name}{t.rows !== null && t.rows !== undefined ? ` (${number(t.rows)})` : ""}</option>
+              ))}
+            </Select>
+          </label>
+        )}
       </div>
 
       <div className="flex min-h-0 flex-1">
@@ -146,7 +158,7 @@ export function Explorer() {
         )}
 
         <section className="flex min-w-0 flex-1 flex-col">
-          <div className="flex items-center gap-1 border-b border-line px-3">
+          <div className="no-scrollbar flex items-center gap-1 overflow-x-auto border-b border-line px-3">
             {(
               [
                 ["data", kind === "redis" ? "Claves" : "Datos", kind === "redis" ? KeyRound : Table2],
@@ -158,18 +170,20 @@ export function Explorer() {
                 key={k}
                 onClick={() => setTab(k)}
                 disabled={k !== "query" && !table}
-                className={clsx("-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-[13px] disabled:opacity-40", tab === k ? "border-brand text-fg" : "border-transparent text-muted hover:text-fg")}
+                className={clsx("-mb-px flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2.5 text-[13px] disabled:opacity-40 pointer-coarse:py-3", tab === k ? "border-brand text-fg" : "border-transparent text-muted hover:text-fg")}
               >
                 <Icon className="size-3.5" />{label}
               </button>
             ))}
-            {table && tab !== "query" && <Badge className="ml-2">{table}</Badge>}
+            {table && tab !== "query" && <Badge className="ml-2 max-md:hidden">{table}</Badge>}
           </div>
 
           {tab === "query" ? (
             <QueryConsole base={base} ns={ns} kind={kind} />
           ) : !table ? (
-            <div className="flex flex-1 items-center justify-center text-[13px] text-muted">Elige una {kind === "mongodb" ? "colección" : "tabla"} de la izquierda.</div>
+            <div className="flex flex-1 items-center justify-center p-6 text-center text-[13px] text-muted">
+              Elige una {kind === "mongodb" ? "colección" : "tabla"} <span className="max-md:hidden">&nbsp;de la izquierda</span><span className="md:hidden">&nbsp;arriba</span>&nbsp;para ver sus datos.
+            </div>
           ) : tab === "structure" ? (
             <div className="flex-1 overflow-auto p-4">
               {structure.isLoading ? <Spinner /> : <ErrorBox error={structure.error} />}
@@ -197,8 +211,8 @@ export function Explorer() {
             <>
               <div className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2">
                 {SEARCH_HINT[kind] && (
-                  <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); setPage(0); setAppliedSearch(search); }}>
-                    <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={SEARCH_HINT[kind]!} className="w-80 font-mono text-xs" />
+                  <form className="flex gap-2 max-sm:w-full" onSubmit={(e) => { e.preventDefault(); setPage(0); setAppliedSearch(search); }}>
+                    <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={SEARCH_HINT[kind]!} className="w-80 font-mono text-xs max-sm:w-full" />
                     <Button size="sm" type="submit">Filtrar</Button>
                   </form>
                 )}
@@ -246,11 +260,11 @@ function QueryConsole({ base, ns, kind }: { base: string; ns: string; kind: Info
           }}
           spellCheck={false}
           placeholder={QUERY_HINT[kind].placeholder}
-          className="block h-48 w-full resize-y bg-bg p-4 font-mono text-[13px] leading-6 text-fg outline-none placeholder:text-faint"
+          className="block h-48 w-full resize-y bg-bg p-4 font-mono text-[13px] leading-6 text-fg outline-none placeholder:text-faint max-sm:h-36 max-sm:text-base"
         />
         <div className="flex items-center gap-3 border-t border-line bg-panel px-3 py-2">
           <Button variant="primary" size="sm" icon={<Play className="size-3.5" />} loading={run.isPending} onClick={exec}>Ejecutar</Button>
-          <span className="text-xs text-faint">⌘/Ctrl + Enter · contexto: <span className="text-muted">{ns}</span></span>
+          <span className="text-xs text-faint"><span className="pointer-coarse:hidden">⌘/Ctrl + Enter · </span>en <span className="text-muted">{ns}</span></span>
           {run.data && (
             <span className="ml-auto text-xs text-muted tabular">
               {run.data.command && <Badge className="mr-2">{run.data.command}</Badge>}

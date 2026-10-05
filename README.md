@@ -72,6 +72,9 @@ crea un registro A hacia la IP del VPS y ejecuta:
 curl -fsSL https://raw.githubusercontent.com/JeanCarlos82/v-hub/main/install.sh | sudo VHUB_DOMAIN=panel.tudominio.com bash
 ```
 
+**En el móvil o como app de escritorio:** abre la dirección del panel y, en Chrome/Edge, pulsa «Instalar app»; en iPhone,
+Safari → Compartir → «Añadir a pantalla de inicio». Se abre a pantalla completa con su icono, como una app más.
+
 **Actualizar:** vuelve a ejecutar el mismo comando. Descarga la última versión y conserva tus datos.
 
 **Dónde queda:** en `/opt/v-hub` (`docker-compose.yml` y `.env`). Los datos están en el volumen Docker `v-hub_vhub-data`.

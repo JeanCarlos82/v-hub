@@ -1,17 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import {
-  AppWindow, ArrowRightLeft, Boxes, ChevronLeft, Database, ExternalLink, Play, Plus, RotateCw, Rocket, ScrollText, Square, Table2, Trash2,
-} from "lucide-react";
+import { AppWindow, ArrowRightLeft, Boxes, Database, ExternalLink, Play, Plus, RotateCw, Rocket, ScrollText, Square, Table2, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
+import { EntityRow, NoUsage, Usage } from "../components/EntityRow";
 import { LogDrawer } from "../components/LogViewer";
 import { CreateDatabaseModal, MoveResourceModal } from "../components/projects";
 import {
-  Badge, Button, Card, Checkbox, ConfirmDelete, Empty, ErrorBox, Field, IconButton, Input, Loading, Modal, PageHeader, StatusBadge, useToast,
+  Badge, Button, Card, Checkbox, ConfirmDelete, ConfirmDialog, Empty, ErrorBox, Field, Input, Loading, Menu, Modal, PageHeader, Spinner, StatusBadge, useToast,
 } from "../components/ui";
 import { api, type ContainerInfo, type Project, type Resource } from "../lib/api";
-import { bytes, pct, statusTone } from "../lib/format";
+import { statusTone } from "../lib/format";
 import { useContainers } from "../lib/hooks";
 
 const TYPE_META = {
@@ -19,6 +18,9 @@ const TYPE_META = {
   database: { label: "Base de datos", icon: Database },
   service: { label: "Servicio", icon: Boxes },
 } as const;
+
+type Action = "start" | "stop" | "restart" | "deploy" | "redeploy";
+const VERBS: Record<Action, string> = { start: "iniciando", stop: "parando", restart: "reiniciando", deploy: "desplegando", redeploy: "redesplegando" };
 
 export function ProjectDetail() {
   const { uuid } = useParams();
@@ -35,19 +37,21 @@ export function ProjectDetail() {
   const [newEnv, setNewEnv] = useState(false);
   const [moving, setMoving] = useState<Resource | null>(null);
   const [deleting, setDeleting] = useState<Resource | null>(null);
+  const [stopping, setStopping] = useState<Resource | null>(null);
   const [deleteVolumes, setDeleteVolumes] = useState(false);
   const [logs, setLogs] = useState<{ id: string; title: string } | null>(null);
   const [pickLogs, setPickLogs] = useState<{ resource: Resource; containers: ContainerInfo[] } | null>(null);
 
   const action = useMutation({
-    mutationFn: ({ r, a }: { r: Resource; a: string }) => api(`/api/resources/${r.type}/${r.uuid}/${a}`, { method: "POST" }),
+    mutationFn: ({ r, a }: { r: Resource; a: Action }) => api(`/api/resources/${r.type}/${r.uuid}/${a}`, { method: "POST" }),
     onSuccess: (_d, { r, a }) => {
-      const verbs: Record<string, string> = { start: "iniciando", stop: "parando", restart: "reiniciando", deploy: "desplegando", redeploy: "redesplegando" };
-      toast("ok", `«${r.name}»: ${verbs[a] ?? a}…`);
+      toast("ok", `«${r.name}»: ${VERBS[a]}…`);
+      setStopping(null);
       setTimeout(() => qc.invalidateQueries({ queryKey: ["projects"] }), 2500);
     },
     onError: (e) => toast("error", (e as Error).message),
   });
+  const run = (r: Resource, a: Action) => action.mutate({ r, a });
 
   const del = useMutation({
     mutationFn: (r: Resource) => api(`/api/resources/${r.type}/${r.uuid}?volumes=${deleteVolumes}`, { method: "DELETE" }),
@@ -61,7 +65,7 @@ export function ProjectDetail() {
   const openLogs = (r: Resource) => {
     const cs = byResource.get(r.uuid) ?? [];
     if (!cs.length) return toast("error", "No se encontró ningún contenedor para este recurso.");
-    if (cs.length === 1) setLogs({ id: cs[0].id, title: cs[0].name });
+    if (cs.length === 1) setLogs({ id: cs[0].id, title: r.name });
     else setPickLogs({ resource: r, containers: cs });
   };
 
@@ -80,111 +84,135 @@ export function ProjectDetail() {
 
   if (projects.isLoading) return <Loading />;
   if (projects.error) return <ErrorBox error={projects.error} />;
-  if (!project) return <Empty title="Proyecto no encontrado"><Link className="text-brand" to="/projects">Volver a proyectos</Link></Empty>;
+  if (!project)
+    return (
+      <Empty title="Proyecto no encontrado" action={<Link className="text-brand" to="/projects">Volver a proyectos</Link>}>
+        Puede que se haya borrado o unido a otro proyecto.
+      </Empty>
+    );
+
+  const total = project.environments.reduce((a, e) => a + e.resources.length, 0);
 
   return (
     <>
-      <Link to="/projects" className="mb-3 inline-flex items-center gap-1 text-[13px] text-muted hover:text-fg"><ChevronLeft className="size-4" />Proyectos</Link>
       <PageHeader
+        back={{ to: "/projects", label: "Proyectos" }}
         title={project.name}
-        subtitle={project.description ?? `uuid ${project.uuid}`}
+        subtitle={project.description || `${project.environments.length} entorno${project.environments.length !== 1 ? "s" : ""} · ${total} recurso${total !== 1 ? "s" : ""}`}
         actions={
           <>
-            <Button icon={<Plus className="size-4" />} onClick={() => setNewEnv(true)}>Entorno</Button>
+            <Button icon={<Plus className="size-4" />} onClick={() => setNewEnv(true)}>Nuevo entorno</Button>
             <Button variant="primary" icon={<Database className="size-4" />} onClick={() => setNewDb(true)}>Nueva base de datos</Button>
           </>
         }
       />
 
-      <div className="mb-4 flex gap-1 border-b border-line">
-        {project.environments.map((e) => (
-          <button
-            key={e.id}
-            onClick={() => setEnvName(e.name)}
-            className={clsx("-mb-px border-b-2 px-3 py-2 text-[13px]", env?.id === e.id ? "border-brand text-fg" : "border-transparent text-muted hover:text-fg")}
-          >
-            {e.name} <span className="ml-1 text-faint">{e.resources.length}</span>
-          </button>
-        ))}
+      <div className="no-scrollbar -mx-4 mb-4 flex gap-1 overflow-x-auto border-b border-line px-4 md:mx-0 md:px-0" role="tablist">
+        {project.environments.map((e) => {
+          const down = e.resources.filter((r) => statusTone(r.status) === "down").length;
+          return (
+            <button
+              key={e.id}
+              role="tab"
+              aria-selected={env?.id === e.id}
+              onClick={() => setEnvName(e.name)}
+              className={clsx(
+                "-mb-px flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2.5 text-[13px] pointer-coarse:py-3",
+                env?.id === e.id ? "border-brand text-fg" : "border-transparent text-muted hover:text-fg",
+              )}
+            >
+              {e.name}
+              <span className="rounded bg-line px-1.5 text-[11px] text-muted">{e.resources.length}</span>
+              {down > 0 && <span className="size-1.5 rounded-full bg-danger" title={`${down} parado${down > 1 ? "s" : ""}`} />}
+            </button>
+          );
+        })}
       </div>
 
       {!env?.resources.length ? (
-        <Empty icon={<Boxes className="size-8" />} title="Este entorno está vacío">
-          Crea una base de datos desde aquí, o despliega apps y servicios desde Coolify y aparecerán automáticamente.
+        <Empty
+          icon={<Boxes className="size-8" />}
+          title="Este entorno está vacío"
+          action={<Button icon={<Database className="size-4" />} onClick={() => setNewDb(true)}>Crear una base de datos</Button>}
+        >
+          Las apps y servicios que despliegues desde Coolify aparecerán aquí solos.
         </Empty>
       ) : (
-        <Card className="overflow-x-auto">
-          <table className="w-full min-w-[820px] text-[13px]">
-            <thead className="text-left text-xs text-faint">
-              <tr>
-                <th className="px-4 py-2.5 font-medium">Recurso</th>
-                <th className="px-2 py-2.5 font-medium">Estado</th>
-                <th className="px-2 py-2.5 font-medium">CPU</th>
-                <th className="px-2 py-2.5 font-medium">Memoria</th>
-                <th className="px-4 py-2.5 text-right font-medium">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {env.resources.map((r) => {
-                const Meta = TYPE_META[r.type];
-                const u = usage.get(r.uuid);
-                const running = statusTone(r.status) === "ok" || statusTone(r.status) === "warn";
-                const busy = action.isPending && action.variables?.r.uuid === r.uuid;
-                return (
-                  <tr key={r.uuid} className="border-t border-line hover:bg-panel-2/50">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-panel-2 text-muted"><Meta.icon className="size-4" /></div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 font-medium">
-                            {r.name}
-                            {r.subtype && <Badge>{r.subtype}</Badge>}
-                          </div>
-                          {r.fqdn ? (
-                            <a href={r.fqdn.split(",")[0]} target="_blank" rel="noreferrer" className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted hover:text-brand">
-                              {r.fqdn.split(",")[0].replace(/^https?:\/\//, "")}<ExternalLink className="size-3" />
-                            </a>
-                          ) : (
-                            <div className="mt-0.5 text-xs text-faint">{Meta.label}</div>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-2 py-3"><StatusBadge status={r.status} /></td>
-                    <td className="px-2 py-3 tabular text-muted">{u?.count ? pct(u.cpu) : "—"}</td>
-                    <td className="px-2 py-3 tabular text-muted">{u?.count ? bytes(u.mem) : "—"}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex justify-end gap-0.5">
-                        {r.type === "database" && (
-                          <IconButton title="Abrir explorador" onClick={() => navigate(`/databases/${encodeURIComponent(`coolify:${r.uuid}`)}`)}><Table2 className="size-4" /></IconButton>
-                        )}
-                        <IconButton title="Logs en vivo" onClick={() => openLogs(r)}><ScrollText className="size-4" /></IconButton>
-                        {r.type === "application" && (
-                          <IconButton title="Desplegar" disabled={busy} onClick={() => action.mutate({ r, a: "deploy" })}><Rocket className="size-4" /></IconButton>
-                        )}
-                        {running ? (
-                          <>
-                            <IconButton title="Reiniciar" disabled={busy} onClick={() => action.mutate({ r, a: "restart" })}><RotateCw className="size-4" /></IconButton>
-                            <IconButton title="Parar" disabled={busy} onClick={() => action.mutate({ r, a: "stop" })}><Square className="size-4" /></IconButton>
-                          </>
-                        ) : (
-                          <IconButton title="Iniciar" disabled={busy} onClick={() => action.mutate({ r, a: "start" })}><Play className="size-4" /></IconButton>
-                        )}
-                        <IconButton title="Mover a otro proyecto" onClick={() => setMoving(r)}><ArrowRightLeft className="size-4" /></IconButton>
-                        <IconButton title="Borrar" className="hover:text-danger" onClick={() => { setDeleteVolumes(false); setDeleting(r); }}><Trash2 className="size-4" /></IconButton>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <Card>
+          {env.resources.map((r) => {
+            const Meta = TYPE_META[r.type];
+            const u = usage.get(r.uuid);
+            const tone = statusTone(r.status);
+            const running = tone === "ok" || tone === "warn";
+            const busy = action.isPending && action.variables?.r.uuid === r.uuid;
+            const url = r.fqdn?.split(",")[0];
+            return (
+              <EntityRow
+                key={r.uuid}
+                icon={<Meta.icon />}
+                title={
+                  <>
+                    <span className="truncate">{r.name}</span>
+                    {r.subtype && <Badge className="max-sm:hidden">{r.subtype}</Badge>}
+                  </>
+                }
+                subtitle={
+                  url ? (
+                    <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-brand">
+                      {url.replace(/^https?:\/\//, "")}<ExternalLink className="size-3" />
+                    </a>
+                  ) : (
+                    `${Meta.label}${r.subtype ? ` · ${r.subtype}` : ""}`
+                  )
+                }
+                status={<StatusBadge status={r.status} />}
+                metrics={running && u?.count ? <Usage cpu={u.cpu} mem={u.mem} /> : running ? <span className="text-xs text-faint">Sin datos de consumo</span> : <NoUsage />}
+                actionsWidth="md:min-w-80"
+                actions={
+                  <>
+                    {busy && <Spinner className="mr-1" />}
+                    {!running && (
+                      <Button size="sm" variant="primary" icon={<Play className="size-3.5" />} disabled={busy} onClick={() => run(r, "start")}>Iniciar</Button>
+                    )}
+                    {r.type === "database" && (
+                      <Button size="sm" icon={<Table2 className="size-3.5" />} onClick={() => navigate(`/databases/${encodeURIComponent(`coolify:${r.uuid}`)}`)}>Explorar</Button>
+                    )}
+                    {r.type === "application" && running && (
+                      <Button size="sm" icon={<Rocket className="size-3.5" />} disabled={busy} onClick={() => run(r, "deploy")}>Desplegar</Button>
+                    )}
+                    <Button size="sm" icon={<ScrollText className="size-3.5" />} onClick={() => openLogs(r)}>Logs</Button>
+                    <Menu
+                      title={r.name}
+                      items={[
+                        { label: "Reiniciar", icon: <RotateCw />, onSelect: () => run(r, "restart"), hidden: !running, disabled: busy },
+                        { label: "Parar…", icon: <Square />, onSelect: () => setStopping(r), hidden: !running, disabled: busy },
+                        { label: "Desplegar", icon: <Rocket />, onSelect: () => run(r, "deploy"), hidden: r.type !== "application" || running },
+                        { label: "Mover a otro proyecto…", icon: <ArrowRightLeft />, onSelect: () => setMoving(r) },
+                        { label: "Borrar…", icon: <Trash2 />, danger: true, onSelect: () => { setDeleteVolumes(false); setDeleting(r); } },
+                      ]}
+                    />
+                  </>
+                }
+              />
+            );
+          })}
         </Card>
       )}
 
       <CreateDatabaseModal open={newDb} onClose={() => setNewDb(false)} projects={projects.data ?? []} defaultProject={project.uuid} defaultEnv={env?.name} />
       <NewEnvModal open={newEnv} onClose={() => setNewEnv(false)} projectUuid={project.uuid} onCreated={setEnvName} />
       <MoveResourceModal resource={moving} onClose={() => setMoving(null)} currentProject={project.uuid} />
+      <ConfirmDialog
+        open={!!stopping}
+        onClose={() => setStopping(null)}
+        onConfirm={() => stopping && run(stopping, "stop")}
+        loading={action.isPending}
+        title={`¿Parar «${stopping?.name}»?`}
+        confirmLabel="Parar"
+        danger
+      >
+        <p className="text-[13px] text-muted">Dejará de funcionar hasta que lo vuelvas a iniciar. Los datos no se pierden.</p>
+      </ConfirmDialog>
       <ConfirmDelete
         open={!!deleting}
         onClose={() => { setDeleting(null); del.reset(); }}
@@ -193,15 +221,20 @@ export function ProjectDetail() {
         name={deleting?.name ?? ""}
         title={`Borrar «${deleting?.name}»`}
       >
-        <p className="text-[13px] text-muted">Se borrarán los contenedores, la configuración y las redes del recurso en Coolify.</p>
-        <Checkbox label="Borrar también los volúmenes (datos)" checked={deleteVolumes} onChange={setDeleteVolumes} />
+        <p className="text-[13px] text-muted">Se borrarán los contenedores, la configuración y las redes del recurso en Coolify. No se puede deshacer.</p>
+        <Checkbox label="Borrar también los volúmenes (datos)" hint="Si no lo marcas, los datos se conservan en el VPS." checked={deleteVolumes} onChange={setDeleteVolumes} />
         <ErrorBox error={del.error} />
       </ConfirmDelete>
       <Modal open={!!pickLogs} onClose={() => setPickLogs(null)} title={`Logs de «${pickLogs?.resource.name}»`}>
+        <p className="text-[13px] text-muted">Este recurso tiene varios contenedores. ¿De cuál quieres ver los logs?</p>
         <div className="space-y-1">
           {pickLogs?.containers.map((c) => (
-            <button key={c.id} onClick={() => { setLogs({ id: c.id, title: c.name }); setPickLogs(null); }} className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-[13px] hover:bg-panel-2">
-              <span className="font-mono text-xs">{c.name}</span>
+            <button
+              key={c.id}
+              onClick={() => { setLogs({ id: c.id, title: c.name }); setPickLogs(null); }}
+              className="flex w-full items-center justify-between gap-2 rounded-md px-3 py-2.5 text-left text-[13px] hover:bg-panel-2 active:bg-panel-2"
+            >
+              <span className="truncate font-mono text-xs">{c.name}</span>
               <StatusBadge status={c.state} />
             </button>
           ))}
